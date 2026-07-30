@@ -27,6 +27,7 @@
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <lombok.version>1.18.30</lombok.version>
         <saToken.version>1.44.0</saToken.version>
+        <mysql-binlog.version>0.30.3</mysql-binlog.version>
     </properties>
 
     <dependencies>
@@ -134,6 +135,12 @@
             <version>${saToken.version}</version>
         </dependency>
 
+        <!-- MySQL Binlog 监听（DDL 变化） -->
+        <dependency>
+            <groupId>com.zendesk</groupId>
+            <artifactId>mysql-binlog-connector-java</artifactId>
+            <version>${mysql-binlog.version}</version>
+        </dependency>
 
     </dependencies>
 
