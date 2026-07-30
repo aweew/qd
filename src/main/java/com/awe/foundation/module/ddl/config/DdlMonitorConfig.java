@@ -1,5 +1,6 @@
 package com.awe.foundation.module.ddl.config;
 
+import com.awe.foundation.module.ddl.config.properties.DdlDingtalkProperties;
 import com.awe.foundation.module.ddl.config.properties.DdlMonitorProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -11,6 +12,6 @@ import org.springframework.context.annotation.Configuration;
  * @since 2026/7/30
  */
 @Configuration
-@EnableConfigurationProperties(DdlMonitorProperties.class)
+@EnableConfigurationProperties({DdlMonitorProperties.class, DdlDingtalkProperties.class})
 public class DdlMonitorConfig {
 }

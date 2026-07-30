@@ -3,6 +3,9 @@ package com.awe.foundation.module.ddl.config.properties;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * MySQL DDL 监听配置属性
  *
@@ -24,9 +27,9 @@ public class DdlMonitorProperties {
     private long serverId = 5642L;
 
     /**
-     * 仅监听指定库的 DDL，为空则监听全部库
+     * 仅监听指定库的 DDL，为空则自动取 spring.datasource.url 中的库名
      */
-    private String database;
+    private List<String> databases = new ArrayList<>();
 
     /**
      * 连接超时时间（毫秒）

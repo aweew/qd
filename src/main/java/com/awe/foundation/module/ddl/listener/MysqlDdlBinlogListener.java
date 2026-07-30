@@ -1,7 +1,9 @@
 package com.awe.foundation.module.ddl.listener;
 
 import com.awe.foundation.module.ddl.config.properties.DdlMonitorProperties;
+import com.awe.foundation.module.ddl.domain.DdlChangeMessage;
 import com.awe.foundation.module.ddl.domain.JdbcEndpoint;
+import com.awe.foundation.module.ddl.notify.DingTalkWebhookNotifier;
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.github.shyiko.mysql.binlog.event.EventData;
 import com.github.shyiko.mysql.binlog.event.EventHeaderV4;
@@ -19,15 +21,19 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+import cn.hutool.core.collection.CollUtil;
+
 import java.net.URI;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 基于 MySQL Binlog 监听表结构 DDL 变化并打印
+ * 基于 MySQL Binlog 监听表结构 DDL 变化并通知
  *
  * @author Awe
  * @since 2026/7/30
@@ -49,11 +55,20 @@ public class MysqlDdlBinlogListener {
 
     private static final Pattern SQL_LINE_COMMENT_PATTERN = Pattern.compile("^\\s*--.*?$", Pattern.MULTILINE);
 
+    private static final Pattern DDL_META_PATTERN = Pattern.compile(
+            "(?i)^(CREATE|ALTER|DROP|RENAME|TRUNCATE)\\s+(?:OR\\s+REPLACE\\s+)?"
+                    + "(TEMPORARY\\s+)?(TABLE|INDEX|VIEW|UNIQUE\\s+INDEX|FULLTEXT\\s+INDEX|SPATIAL\\s+INDEX)?"
+                    + "(?:\\s+IF\\s+(?:NOT\\s+)?EXISTS)?\\s*"
+                    + "(?:`?([\\w]+)`?\\.)?`?([\\w]+)`?");
+
     @Resource
     private DdlMonitorProperties ddlMonitorProperties;
 
     @Resource
     private DataSourceProperties dataSourceProperties;
+
+    @Resource
+    private DingTalkWebhookNotifier dingTalkWebhookNotifier;
 
     private BinaryLogClient binaryLogClient;
 
@@ -72,13 +87,11 @@ public class MysqlDdlBinlogListener {
             return;
         }
 
-        // 1. 解析数据源连接信息
+        // 1. 解析数据源连接信息与监听库列表
         JdbcEndpoint jdbcEndpoint = parseJdbcEndpoint(dataSourceProperties.getUrl());
         String username = dataSourceProperties.getUsername();
         String password = dataSourceProperties.getPassword();
-        String listenDatabase = StringUtils.isNotBlank(ddlMonitorProperties.getDatabase())
-                ? ddlMonitorProperties.getDatabase()
-                : jdbcEndpoint.getDatabase();
+        Set<String> listenDatabases = resolveListenDatabases(jdbcEndpoint.getDatabase());
 
         // 2. 构建 Binlog 客户端（跳过行变更反序列化，只关心 DDL 的 QueryEvent）
         binaryLogClient = new BinaryLogClient(jdbcEndpoint.getHost(), jdbcEndpoint.getPort(), username, password);
@@ -105,29 +118,32 @@ public class MysqlDdlBinlogListener {
             }
             String eventDatabase = queryEventData.getDatabase();
             String ddlSql = sql.trim();
-            if (StringUtils.isNotBlank(listenDatabase)
+            if (CollUtil.isNotEmpty(listenDatabases)
                     && StringUtils.isNotBlank(eventDatabase)
-                    && !StringUtils.equalsIgnoreCase(listenDatabase, eventDatabase)) {
-                log.debug("忽略非目标库 DDL，listenDatabase={}, eventDatabase={}, ddl={}",
-                        listenDatabase, eventDatabase, ddlSql);
+                    && !containsIgnoreCase(listenDatabases, eventDatabase)) {
+                log.debug("忽略非目标库 DDL，listenDatabases={}, eventDatabase={}, ddl={}",
+                        listenDatabases, eventDatabase, ddlSql);
                 return;
             }
 
-            // 3. 打印 DDL 变化
+            // 3. 解析并推送 DDL 变化
             long timestamp = 0L;
             if (event.getHeader() instanceof EventHeaderV4 eventHeaderV4) {
                 timestamp = eventHeaderV4.getTimestamp();
             }
-            String databaseName = StringUtils.defaultIfBlank(eventDatabase, listenDatabase);
-            log.info("检测到表结构 DDL 变化，database={}, eventType={}, timestamp={}, ddl={}",
-                    databaseName, EventType.QUERY, timestamp, ddlSql);
-            System.out.println("[DDL-CHANGE] database=" + databaseName + ", ddl=" + ddlSql);
+            String databaseName = StringUtils.defaultIfBlank(eventDatabase,
+                    CollUtil.getFirst(listenDatabases));
+            DdlChangeMessage changeMessage = buildDdlChangeMessage(ddlSql, databaseName, timestamp, jdbcEndpoint);
+            log.info("检测到表结构 DDL 变化，database={}, changeType={}, objectName={}, timestamp={}, ddl={}",
+                    changeMessage.getDatabase(), changeMessage.getChangeType(), changeMessage.getObjectName(),
+                    timestamp, ddlSql);
+            dingTalkWebhookNotifier.notifyDdlChange(changeMessage);
         });
         binaryLogClient.registerLifecycleListener(new BinaryLogClient.AbstractLifecycleListener() {
             @Override
             public void onConnect(BinaryLogClient client) {
-                log.info("MySQL Binlog DDL 监听已连接，host={}:{}, database={}, serverId={}",
-                        jdbcEndpoint.getHost(), jdbcEndpoint.getPort(), listenDatabase, ddlMonitorProperties.getServerId());
+                log.info("MySQL Binlog DDL 监听已连接，host={}:{}, databases={}, serverId={}",
+                        jdbcEndpoint.getHost(), jdbcEndpoint.getPort(), listenDatabases, ddlMonitorProperties.getServerId());
             }
 
             @Override
@@ -175,6 +191,83 @@ public class MysqlDdlBinlogListener {
         } finally {
             started.set(false);
         }
+    }
+
+    /**
+     * 构建 DDL 变更通知消息
+     *
+     * @param ddlSql       DDL 原文
+     * @param databaseName 数据库名
+     * @param timestamp    事件时间戳
+     * @param jdbcEndpoint 连接端点
+     * @return 通知消息
+     */
+    private DdlChangeMessage buildDdlChangeMessage(String ddlSql, String databaseName,
+                                                   long timestamp, JdbcEndpoint jdbcEndpoint) {
+        String normalizedSql = SQL_BLOCK_COMMENT_PATTERN.matcher(ddlSql).replaceAll(" ");
+        normalizedSql = SQL_LINE_COMMENT_PATTERN.matcher(normalizedSql).replaceAll(" ");
+        normalizedSql = normalizedSql.trim();
+
+        String changeType = "DDL";
+        String objectType = "-";
+        String objectName = "-";
+        Matcher metaMatcher = DDL_META_PATTERN.matcher(normalizedSql);
+        if (metaMatcher.find()) {
+            changeType = StringUtils.upperCase(metaMatcher.group(1), Locale.ROOT);
+            String parsedObjectType = metaMatcher.group(3);
+            if (StringUtils.isNotBlank(parsedObjectType)) {
+                objectType = StringUtils.upperCase(parsedObjectType.replaceAll("\\s+", " "), Locale.ROOT);
+            } else if (StringUtils.equalsIgnoreCase(changeType, "TRUNCATE")
+                    || StringUtils.equalsIgnoreCase(changeType, "RENAME")) {
+                objectType = "TABLE";
+            }
+            if (StringUtils.isNotBlank(metaMatcher.group(5))) {
+                objectName = metaMatcher.group(5);
+            }
+        }
+
+        return DdlChangeMessage.builder()
+                .database(databaseName)
+                .changeType(changeType)
+                .objectType(objectType)
+                .objectName(objectName)
+                .ddlSql(ddlSql)
+                .eventTime(timestamp)
+                .host(jdbcEndpoint.getHost())
+                .port(jdbcEndpoint.getPort())
+                .build();
+    }
+
+    /**
+     * 解析监听库列表：配置优先，未配置时回退到数据源库名
+     *
+     * @param defaultDatabase 数据源默认库名
+     * @return 小写库名集合
+     */
+    private Set<String> resolveListenDatabases(String defaultDatabase) {
+        Set<String> databases = new HashSet<>();
+        if (CollUtil.isNotEmpty(ddlMonitorProperties.getDatabases())) {
+            for (String database : ddlMonitorProperties.getDatabases()) {
+                if (StringUtils.isNotBlank(database)) {
+                    databases.add(database.trim().toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        if (CollUtil.isEmpty(databases) && StringUtils.isNotBlank(defaultDatabase)) {
+            databases.add(defaultDatabase.toLowerCase(Locale.ROOT));
+        }
+        return databases;
+    }
+
+    /**
+     * 判断事件库是否在监听列表中（忽略大小写）
+     *
+     * @param listenDatabases 监听库集合（小写）
+     * @param eventDatabase   事件库名
+     * @return true-命中
+     */
+    private boolean containsIgnoreCase(Set<String> listenDatabases, String eventDatabase) {
+        return listenDatabases.contains(eventDatabase.toLowerCase(Locale.ROOT));
     }
 
     /**
