@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.awe</groupId>
-    <artifactId>foundation</artifactId>
+    <artifactId>qd</artifactId>
     <version>${revision}</version>
 
-    <name>foundation</name>
+    <name>qd</name>
     <description>基地</description>
 
     <properties>

@@ -1,14 +1,14 @@
 # 服务配置
 server:
   port:
-    6001
+    7001
   servlet:
-    context-path: /foundation
+    context-path: /qd
 
 # spring 配置
 spring:
   application:
-    name: foundation
+    name: qd
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher
@@ -16,15 +16,15 @@ spring:
     hikari:
       maximum-pool-size: 20
       idle-timeout: 10000
-    url: jdbc:p6spy:mysql://119.3.87.115:3306/ld_test?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true
+    url: jdbc:p6spy:mysql://100.71.129.75:3306/qd?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true
     username: root
-    password: 2wsx@WSX
+    password: "qazWSX123"
     driver-class-name: com.p6spy.engine.spy.P6SpyDriver
 
 # mybatis-plus 配置
 mybatis-plus:
   mapper-locations: classpath*:/mapper/*.xml
-  type-aliases-package: com.awe.foundation.manager.domain
+  type-aliases-package: com.awe.qd.manager.domain
   global-config:
     dbConfig:
       # 主键类型
@@ -65,32 +65,6 @@ thread-pool:
   queueCapacity: 128
   # 线程池维护线程所允许的空闲时间
   keepAliveSeconds: 300
-
-# MySQL 表结构 DDL 监听（基于 Binlog）
-ddl-monitor:
-  # 是否开启 DDL 监听
-  enabled: true
-  # Binlog 客户端 serverId，同一 MySQL 实例下需唯一
-  server-id: 5642
-  # 仅监听指定库（多库）；为空则自动取 spring.datasource.url 中的库名
-  databases:
-    - ld_test
-    - ydd_test
-    - ydd
-    - ydd2
-    - ydd3
-  # 连接超时（毫秒）
-  connect-timeout: 10000
-  # 心跳间隔（毫秒）
-  keepalive-interval: 15000
-  # 钉钉自定义机器人通知
-  dingtalk:
-    # 是否开启钉钉通知
-    enabled: true
-    # 钉钉机器人 Webhook 地址，例如 https://oapi.dingtalk.com/robot/send?access_token=xxx
-    webhook-url: https://oapi.dingtalk.com/robot/send?access_token=f036e267295363fc853efe21ada9abf98c2ab3fbe2683b59193f7c217851a8c5
-    # 钉钉机器人加签密钥
-    secret: SECda46be299cc735ffc48f6f3cef1b5824a1c3ab5d70b78c2058e3e89a25c5c246
 
 # Sa-Token 配置
 sa-token:

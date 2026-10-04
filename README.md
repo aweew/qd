@@ -1,7 +1,7 @@
 ## 基地
 
-- [项目地址](https://gitee.com/dtstack/foundation)
-- [文档地址](https://dtstack.gitee.io/foundation/)
+- [项目地址](https://gitee.com/dtstack/qd)
+- [文档地址](https://dtstack.gitee.io/qd/)
 
 ### 技术栈
 hutool
@@ -16,7 +16,7 @@ mapstruct
 
 ### 规范
 #### 枚举值规范
-目录：`~/foundation/common/constant/enums`
+目录：`~/qd/common/constant/enums`
 - 枚举值命名使用大写字母和下划线分隔单词，例如：`USER_STATUS_ACTIVE`。
 - 枚举值应具有描述性，能够清晰表达其含义。
 - 枚举值应避免使用缩写，除非是广泛认可的缩写词。

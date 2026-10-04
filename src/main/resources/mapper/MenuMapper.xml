@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.awe.foundation.manager.mapper.MenuMapper">
+<mapper namespace="com.awe.qd.manager.mapper.MenuMapper">
 
-    <select id="listAllMenusByUserId" resultType="com.awe.foundation.manager.domain.menu.dto.resp.MenuResp">
+    <select id="listAllMenusByUserId" resultType="com.awe.qd.manager.domain.menu.dto.resp.MenuResp">
         SELECT
             t4.id,
             t4.name,
@@ -36,7 +36,7 @@
           AND t1.is_delete = 0
     </select>
 
-    <select id="listAllMenusByRoleId" resultType="com.awe.foundation.manager.domain.menu.dto.resp.MenuResp">
+    <select id="listAllMenusByRoleId" resultType="com.awe.qd.manager.domain.menu.dto.resp.MenuResp">
         SELECT
             DISTINCT t4.id,
             t4.name,
