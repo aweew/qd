@@ -13,7 +13,10 @@ import org.springframework.context.annotation.Configuration;
  * @date 2023/4/7 15:50
  */
 @Configuration
-@MapperScan(basePackages = "com.awe.qd.manager.**.mapper")
+@MapperScan(basePackages = {
+        "com.awe.qd.manager.**.mapper",
+        "com.awe.qd.module.community.mapper"
+})
 public class MybatisConfig {
 
     @Bean
